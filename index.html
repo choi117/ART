@@ -1,0 +1,124 @@
+<!-- ... existing code ... -->
+                    return;
+                }
+                const targetId = deleteTargetId;
+                closeConfirmModal();
+                closeDetailModal();
+
+                try {
+                    if (useCloudStorage && currentUser) {
+                        const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'artworks', targetId);
+                        await deleteDoc(docRef);
+                    } else {
+                        artworks = artworks.filter(a => a.id !== targetId);
+                        saveToLocalDB();
+                        renderAll();
+                    }
+                    showToast('작품이 삭제되었습니다.');
+                } catch (err) {
+                    console.error('삭제 오류:', err);
+                    showToast('작품 삭제 중 오류가 발생했습니다.', 'error');
+                }
+            });
+
+        // ==========================================
+        // 브라우저 내장 영구 저장소 (IndexedDB - Vercel/GitHub 호스팅용)
+        // ==========================================
+        const IDB_NAME = 'MyArtDiaryDB';
+        const IDB_STORE = 'artworks_store';
+
+        function openLocalDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(IDB_NAME, 1);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(IDB_STORE)) {
+                        db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        async function saveToLocalDB() {
+            try {
+                const idb = await openLocalDB();
+                const tx = idb.transaction(IDB_STORE, 'readwrite');
+                const store = tx.objectStore(IDB_STORE);
+                store.clear();
+                artworks.forEach(item => store.put(item));
+            } catch (e) {
+                console.warn('IndexedDB 저장 경고:', e);
+            }
+        }
+
+        async function loadFromLocalDB() {
+            try {
+                const idb = await openLocalDB();
+                return new Promise((resolve) => {
+                    const tx = idb.transaction(IDB_STORE, 'readonly');
+                    const store = tx.objectStore(IDB_STORE);
+                    const req = store.getAll();
+                    req.onsuccess = () => resolve(req.result || []);
+                    req.onerror = () => resolve([]);
+                });
+            } catch (e) {
+                return [];
+            }
+        }
+
+        // ==========================================
+        // JSON 백업 내보내기 및 불러오기
+        // ==========================================
+<!-- ... existing code ... -->
+                // GitHub 저장소용 README.md 자동 생성
+                const readmeContent = `# 🎨 나만의 아트 다이어리 (My Art Gallery)\n\n직접 그린 그림 이미지와 그날의 감정, 작업 노트를 함께 기록하고 전시하는 개인 맞춤형 웹 갤러리입니다.\n\n## 🚀 Vercel 및 GitHub Pages로 웹사이트 배포하기\n1. 이 폴더의 \`index.html\`과 \`README.md\` 파일을 GitHub 저장소에 업로드합니다.\n2. **Vercel (vercel.com)** 에 GitHub 계정으로 로그인한 뒤 **Add New Project**에서 해당 저장소를 선택하고 **Deploy**를 누르면 즉시 전용 웹사이트 주소가 생성됩니다!\n`;
+                zip.file('README.md', readmeContent);
+
+                // Vercel 설정 파일 (정적 HTML 라우팅 보장)
+                zip.file('vercel.json', JSON.stringify({ cleanUrls: true }, null, 2));
+
+                // ZIP 파일 빌드 및 다운로드 트리거
+<!-- ... existing code ... -->
+                    } else {
+                        importedList.forEach(item => {
+                            if (item.title && item.imageData) {
+                                artworks.unshift({
+                                    ...item,
+                                    id: 'imported-' + Date.now() + Math.random().toString(36).substr(2, 5)
+                                });
+                            }
+                        });
+                        saveToLocalDB();
+                        renderAll();
+                    }
+
+                    showToast('백업 데이터를 성공적으로 복원했습니다!');
+<!-- ... existing code ... -->
+            function fallbackToLocalMode() {
+                useCloudStorage = false;
+                loadFromLocalDB().then((savedItems) => {
+                    if (savedItems && savedItems.length > 0) {
+                        artworks = savedItems;
+                    } else if (!localStorage.getItem('art_diary_local_seeded')) {
+                        localStorage.setItem('art_diary_local_seeded', 'true');
+                        artworks = [...SAMPLE_ARTWORKS];
+                        saveToLocalDB();
+                    } else {
+                        artworks = [];
+                    }
+                    loadingState.classList.add('hidden');
+                    if (syncStatusText) {
+                        syncStatusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> 기기 내장 갤러리 저장소 활성화됨`;
+                    }
+                    renderAll();
+                });
+            }
+        }
+
+        // 앱 시작
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
